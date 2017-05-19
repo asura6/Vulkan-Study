@@ -4,14 +4,10 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/vec4.hpp>
-#include <glm/mat4x4.hpp>
-
-#include "setup.h" 
-
+#include <glm/mat4x4.hpp> 
+#include "vulkan_application.h" 
 #include <iostream> 
-using std::cout; using std::endl;
-
-
+using std::cout; using std::endl; 
 
 int main() { 
     try {

@@ -1,5 +1,3 @@
-#define DEBUG
-
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -13,7 +11,7 @@ using std::cout; using std::endl;
 #include <vector>
 using std::vector;
 
-#include "setup.h"
+#include "vulkan_application.h"
 #include "debug_print.h"
 
 #include <algorithm>
@@ -24,63 +22,7 @@ using std::string;
 
 /*************/
 /* FUNCTIONS */
-/*************/
-
-void vk::run(void)
-{
-    main_loop();
-}
-
-void vk::glfw_init(void)
-{ 
-    /* Initialize the GLFW library */
-    glfwInit();
-    /* Do not use a OpenGL context, disable resizing */
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE); 
-    /* Create the window */
-    window = glfwCreateWindow(
-            WIDTH, HEIGHT, "Vulkan", nullptr, nullptr); 
-}
-
-void vk::main_loop(void)
-{
-    while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
-        //drawFrame();
-    } 
-    //cout << "There are currently " << devices.size() << " devices active" << endl;
-    //cout << "Waiting until device is idle device" << endl;
-    //auto result = vkDeviceWaitIdle(devices[0].device);
-    //
-    //print_result(result);
-    //cout << "Device is now idle" << endl;
-    //vkDestroyDevice(devices[0], nullptr); 
-
-
-    glfwDestroyWindow(window);
-    glfwTerminate(); 
-}
-
-void vk::init(void)
-{ 
-    load_available_instance_extensions();
-    print_available_instance_extensions(); 
-    load_required_instance_extensions();
-    print_required_instance_extensions(); 
-    create_instance(); 
-    load_devices();
-    load_device_extensions();
-    print_device_extensions(); 
-    print_device_infos();
-    load_features();
-    load_memory_properties();
-    load_queue_family_properties();
-    print_queue_family_properties(); 
-    create_logical_device();
-    load_layer_properties();
-    print_layer_properties(); 
-}
+/*************/ 
 
 /* Create a Vulkan instance */
 void vk::create_instance(void)
@@ -294,15 +236,12 @@ void vk::create_logical_device()
 
     /* Create the logical device */
     VkResult result; 
-    VkDevice logicalDevice;
     result = vkCreateDevice(
             devices[deviceIndex].physicalDevice, 
             &createInfo, 
             nullptr, 
-            &logicalDevice);
+            &device);
 
-    logicalDevices.resize(logicalDevices.size() + 1);
-    logicalDevices[logicalDevices.size() - 1].logicalDevice = logicalDevice;
     print_result(result); 
 }
 
@@ -419,10 +358,6 @@ void vk::load_required_instance_extensions(void)
 #ifndef NDEBUG
     instanceExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
 #endif 
-
-    for (auto &c : instanceExtensions) {
-        cout << c << endl;
-    } 
 }
 
 void vk::print_required_instance_extensions(void)

@@ -25,7 +25,7 @@ void inline print_failure(string str) {
 #ifndef NDEBUG 
 
 #define print_func()\
-    cout <<  magenta << std::setw(30) << std::left << __func__ << reset  << '\t'
+    cout <<  magenta << std::setw(40) << std::left << __func__ << reset  << '\t'
 
 #define print_result(result)\
 {\
