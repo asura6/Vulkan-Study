@@ -1,5 +1,7 @@
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+//#define NDEBUG
+
+//#define GLFW_INCLUDE_VULKAN
+//#include <GLFW/glfw3.h>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -11,7 +13,7 @@ using std::cout; using std::endl;
 #include <vector>
 using std::vector;
 
-#include "vulkan_application.h"
+#include "setup.h"
 #include "debug_print.h"
 
 #include <algorithm>
@@ -22,7 +24,28 @@ using std::string;
 
 /*************/
 /* FUNCTIONS */
-/*************/ 
+/*************/
+
+void vk::init(void)
+{
+    load_instance_extensions();
+    print_instance_extensions();
+
+    //load_required_instance_extensions();
+
+    create_instance();
+    load_devices();
+    load_device_extensions();
+    print_device_extensions(); 
+    print_device_infos();
+    load_features();
+    load_memory_properties();
+    load_queue_family_properties();
+    print_queue_family_properties(); 
+    create_logical_device();
+    load_layer_properties();
+    print_layer_properties(); 
+}
 
 /* Create a Vulkan instance */
 void vk::create_instance(void)
@@ -45,10 +68,10 @@ void vk::create_instance(void)
         nullptr,                            //pNext
         0,                                  //flags
         &appInfo,                           //pApplicationInfo
-        (uint32_t)layers.size(),            //enabledLayerCount
-        layers.data(),                      //ppEnabledLayerNames
-        (uint32_t)instanceExtensions.size(),//enabledExtensionCount
-        instanceExtensions.data()           //ppEnabledExtensionNames 
+        (uint32_t)validationLayers.size(),  //enabledLayerCount
+        validationLayers.data(),            //ppEnabledLayerNames
+        0,//(uint32_t)deviceExtensions.size(),  //enabledExtensionCount
+        0//deviceExtensions.data()              //ppEnabledExtensionNames 
     }; 
 
     VkResult result = vkCreateInstance(&createInfo, nullptr, &instance); 
@@ -176,22 +199,20 @@ void vk::print_queue_family_properties(void)
 }
 
 /* Looks for and returns an index to a device with a graphics queue family */
-int32_t vk::find_suitable_device(void)
+uint32_t vk::find_suitable_device(void)
 { 
     uint32_t extensions_found = 0;
     //for (auto &dev : devices) {
     for (uint32_t i = 0; i != devices.size(); i++) {
         // Check if a graphics queue is supported
         if (!devices[i].queueFamilyIndices.hasGraphicsQueue()) { 
-            return -1; 
-        } 
-
+            return -1;
+        }
         // Check if required extensions are supported 
-        for (uint32_t j = 0; j != requiredDeviceExtensions.size(); j++) { 
-            for (auto &extension : devices[i].deviceExtensionProperties) { 
-                if (strcmp(extension.extensionName, requiredDeviceExtensions[j]) == 0) { 
+        for (auto &requirement : requiredDeviceExtensions) {
+            for (auto &extension : devices[i].deviceExtensionProperties) {
+                if (extension.extensionName == requirement) { 
                     extensions_found++;
-                    break;
                 }
             } 
         } 
@@ -205,14 +226,15 @@ int32_t vk::find_suitable_device(void)
 
 void vk::create_logical_device() 
 { 
-    int32_t deviceIndex = find_suitable_device(); 
-    /* throw exception of no graphics queue available */
-    if (deviceIndex < 0) { 
-        throw std::runtime_error("Could not find a suitable device");
-    }
+    uint32_t deviceIndex = find_suitable_device(); 
     const float queuePriority = 1.f;
 
-    /* Fill out create info structures */
+    /* Convert string to const char * */
+    vector<const char *> reqExtensions;
+    for (auto &c : requiredDeviceExtensions) {
+        reqExtensions.push_back(c.c_str());
+    }
+
     const VkDeviceQueueCreateInfo deviceQueueCreateInfo  = {
         VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         nullptr,                                //pNext
@@ -221,27 +243,32 @@ void vk::create_logical_device()
         1,                                      //Queue count 
         &queuePriority                          //pQueuePriorities
     }; 
+
     const VkDeviceCreateInfo createInfo = {
         VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         nullptr,                              //pNext
         0,                                    //flags
         1,                                    //queueCreateInfoCount
         &deviceQueueCreateInfo,               //pQueueCreateInfos
-        (uint32_t)layers.size(),              //enaledLayerCount
-        layers.data(),                        //ppEnabledLayerNames,
-        (uint32_t)requiredDeviceExtensions.size(),  //enabledExtensionCount,
-        requiredDeviceExtensions.data(),      //ppEnabledExtensionNames
+        (uint32_t)validationLayers.size(),    //enaledLayerCount
+        validationLayers.data(),              //ppEnabledLayerNames,
+        (uint32_t)reqExtensions.size(),       //enabledExtensionCount,
+        reqExtensions.data(),                 //ppEnabledExtensionNames
         &devices[deviceIndex].features        //pEnabledFeatures 
-    }; 
+    };
 
-    /* Create the logical device */
+    (void)createInfo;
+
     VkResult result; 
+    VkDevice logicalDevice;
     result = vkCreateDevice(
             devices[deviceIndex].physicalDevice, 
             &createInfo, 
             nullptr, 
-            &device);
+            &logicalDevice);
 
+    logicalDevices.resize(logicalDevices.size() + 1);
+    logicalDevices[logicalDevices.size() - 1].logicalDevice = logicalDevice;
     print_result(result); 
 }
 
@@ -284,7 +311,7 @@ void vk::print_layer_properties(void)
     } 
 }
 
-void vk::load_available_instance_extensions(void)
+void vk::load_instance_extensions(void)
 { 
     uint32_t propertyCount;
     //Get vector size
@@ -302,7 +329,7 @@ void vk::load_available_instance_extensions(void)
     print_result(result);
 }
 
-void vk::print_available_instance_extensions(void) 
+void vk::print_instance_extensions(void) 
 {
     cout << "Printing instance extensions available" << endl;
     for (auto &extension : instanceExtensionProperties) {
@@ -344,26 +371,53 @@ void vk::print_device_extensions(void)
     }
 }
 
-void vk::load_required_instance_extensions(void)
-{ 
-    uint32_t extensionCount = 0; 
-    const char** glfwExtensions;
-    glfwExtensions = glfwGetRequiredInstanceExtensions(&extensionCount); 
+//void vk::load_required_instance_extensions(void)
+//{
+//    vector<string> extensions;
+//    uint32_t extensionCount = 0;
+//    const char** glfwExtensions;
+//    glfwExtensions = glfwGetRequiredInstanceExtensions(&extensionCount);
+//
+//    for (uint32_t i = 0; i != extensionCount; i++) {
+//        extensions.push_back(string(glfwExtensions[i], strnlen(glfwExtensions[i], 255U)));
+//    }
+//
+//    cout << "Found " << endl;
+//    for (auto s : extensions) {
+//        cout << s << endl;
+//    } 
+//}
+//
+//void vk::print_required_instance_extensions(void)
+//{
+//    cout << "Printing required instance extensions..." << endl;
+//    for ( auto ext : require
+//}
 
-    for (uint32_t i = 0; i != extensionCount; i++) {
-        instanceExtensions.push_back(glfwExtensions[i]);
-    }
-
-    /* If in debug mode then add the debug extension as well */
-#ifndef NDEBUG
-    instanceExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
-#endif 
+void vk::run(void)
+{
+    main_loop();
 }
 
-void vk::print_required_instance_extensions(void)
+void vk::glfw_init(void)
+{ 
+    /* Initialize the GLFW library */
+    glfwInit();
+    /* Do not use a OpenGL context, disable resizing */
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE); 
+    /* Create the window */
+    window = glfwCreateWindow(
+            WIDTH, HEIGHT, "Vulkan", nullptr, nullptr); 
+}
+
+void vk::main_loop(void)
 {
-    cout << "The following are required instance extensions:" << endl;
-    for ( auto &ext : instanceExtensions) {
-        cout << ext << endl;
-    }
-} 
+    while (!glfwWindowShouldClose(window)) {
+        glfwPollEvents();
+        //drawFrame();
+    } 
+    //vkDeviceWaitIdle(device);
+    glfwDestroyWindow(window);
+    glfwTerminate(); 
+}
