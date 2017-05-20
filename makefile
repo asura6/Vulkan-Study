@@ -14,7 +14,7 @@ default: $(TARGET)
 $(TARGET): $(OBJ) $(HEADER)
 	$(CC) -o $(TARGET) $(OBJ) $(CFLAGS) $(LDFLAGS)
 
-%.o: %.cpp
+%.o: %.cpp $(HEADER)
 	$(CC) -o $@ -c $< $(CFLAGS) $(LDFLAGS)
 
 .PHONY: test clean

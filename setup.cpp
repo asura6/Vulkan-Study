@@ -1,7 +1,5 @@
-//#define NDEBUG
-
-//#define GLFW_INCLUDE_VULKAN
-//#include <GLFW/glfw3.h>
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -12,8 +10,9 @@
 using std::cout; using std::endl;
 #include <vector>
 using std::vector;
+#include <set>
 
-#include "setup.h"
+#include "vulkan_application.h"
 #include "debug_print.h"
 
 #include <algorithm>
@@ -24,28 +23,7 @@ using std::string;
 
 /*************/
 /* FUNCTIONS */
-/*************/
-
-void vk::init(void)
-{
-    load_instance_extensions();
-    print_instance_extensions();
-
-    //load_required_instance_extensions();
-
-    create_instance();
-    load_devices();
-    load_device_extensions();
-    print_device_extensions(); 
-    print_device_infos();
-    load_features();
-    load_memory_properties();
-    load_queue_family_properties();
-    print_queue_family_properties(); 
-    create_logical_device();
-    load_layer_properties();
-    print_layer_properties(); 
-}
+/*************/ 
 
 /* Create a Vulkan instance */
 void vk::create_instance(void)
@@ -68,10 +46,10 @@ void vk::create_instance(void)
         nullptr,                            //pNext
         0,                                  //flags
         &appInfo,                           //pApplicationInfo
-        (uint32_t)validationLayers.size(),  //enabledLayerCount
-        validationLayers.data(),            //ppEnabledLayerNames
-        0,//(uint32_t)deviceExtensions.size(),  //enabledExtensionCount
-        0//deviceExtensions.data()              //ppEnabledExtensionNames 
+        (uint32_t)layers.size(),            //enabledLayerCount
+        layers.data(),                      //ppEnabledLayerNames
+        (uint32_t)instanceExtensions.size(),//enabledExtensionCount
+        instanceExtensions.data()           //ppEnabledExtensionNames 
     }; 
 
     VkResult result = vkCreateInstance(&createInfo, nullptr, &instance); 
@@ -95,48 +73,7 @@ void vk::load_devices(void)
         devices[i].physicalDevice = physicalDevices[i];
     } 
     print_result(result);
-}
-
-void vk::print_device_infos(void) 
-{
-    cout << "Printing device infos:" << endl; 
-    for (uint32_t i = 0; i!= devices.size(); i++) {
-        VkPhysicalDeviceProperties properties;
-        vkGetPhysicalDeviceProperties(devices[i].physicalDevice, &properties); 
-        cout << std::setw(20) << std::left <<
-            "--> Device name: " << properties.deviceName << endl;
-
-        int type = properties.deviceType;
-        cout << std::setw(20) << std::left <<
-            "--> Device type: "; 
-
-        switch (type) {
-            case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
-                cout << "Integrated GPU";
-                break;
-            case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
-                cout << "Discrete GPU";
-                break;
-            case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
-                cout << "Virtual GPU";
-                break;
-            case VK_PHYSICAL_DEVICE_TYPE_OTHER:
-                cout << "(Other)";
-                break;
-            case VK_PHYSICAL_DEVICE_TYPE_CPU:
-                cout << "CPU"; 
-                break;
-            default:;
-        }
-        cout << endl;
-
-        cout << std::setw(20) << std::left <<
-            "--> Vulkan version: " << 
-            VK_VERSION_MAJOR(properties.apiVersion) << "." <<
-            VK_VERSION_MINOR(properties.apiVersion) << "." <<
-            VK_VERSION_PATCH(properties.apiVersion) << endl; 
-    }
-}
+} 
 
 void vk::load_features(void)
 { 
@@ -162,8 +99,7 @@ void vk::load_queue_family_properties(void)
         vkGetPhysicalDeviceQueueFamilyProperties(
                 device.physicalDevice, &queueFamilyCount, nullptr); 
         //Resize vector to fit 
-        device.queueFamilyProperties.resize(queueFamilyCount);
-        //device.queueFamilyIndices.resize(queueFamilyCount);
+        device.queueFamilyProperties.resize(queueFamilyCount); 
         //Get queue family properties
         vkGetPhysicalDeviceQueueFamilyProperties(
                 device.physicalDevice,
@@ -171,8 +107,23 @@ void vk::load_queue_family_properties(void)
                 device.queueFamilyProperties.data()
                 );
 
+        VkBool32 presentSupport = false;
         for (uint32_t j = 0; j != queueFamilyCount; j++) { 
-            device.queueFamilyIndices.graphicsIndex = j;
+            //Get graphics queue index
+            if (device.queueFamilyProperties[j].queueFlags 
+                    & VK_QUEUE_GRAPHICS_BIT) {
+                device.queueFamilyIndices.graphicsIndex = j;
+            }
+            //Check if present supported
+            vkGetPhysicalDeviceSurfaceSupportKHR(
+                    device.physicalDevice, 
+                    j,
+                    surface,
+                    &presentSupport); 
+            if (presentSupport) {
+                device.queueFamilyIndices.presentIndex = j;
+            }
+
         } 
     }
 }
@@ -199,20 +150,27 @@ void vk::print_queue_family_properties(void)
 }
 
 /* Looks for and returns an index to a device with a graphics queue family */
-uint32_t vk::find_suitable_device(void)
+int32_t vk::find_suitable_device(void)
 { 
-    uint32_t extensions_found = 0;
-    //for (auto &dev : devices) {
+    uint32_t extensions_found = 0; 
     for (uint32_t i = 0; i != devices.size(); i++) {
         // Check if a graphics queue is supported
         if (!devices[i].queueFamilyIndices.hasGraphicsQueue()) { 
+            return -1; 
+        } 
+        // Check if a present queue is supported
+        if (!devices[i].queueFamilyIndices.hasPresentQueue()) {
             return -1;
-        }
+        } 
         // Check if required extensions are supported 
-        for (auto &requirement : requiredDeviceExtensions) {
-            for (auto &extension : devices[i].deviceExtensionProperties) {
-                if (extension.extensionName == requirement) { 
+        for (uint32_t j = 0; j != requiredDeviceExtensions.size(); j++) { 
+            for (auto &extension : devices[i].deviceExtensionProperties) { 
+                if (strcmp(
+                            extension.extensionName,
+                            requiredDeviceExtensions[j])
+                        == 0) { 
                     extensions_found++;
+                    break;
                 }
             } 
         } 
@@ -226,49 +184,55 @@ uint32_t vk::find_suitable_device(void)
 
 void vk::create_logical_device() 
 { 
-    uint32_t deviceIndex = find_suitable_device(); 
-    const float queuePriority = 1.f;
+    int32_t deviceIndex = find_suitable_device(); 
+    chosenDevice = devices[deviceIndex];
+    vector<VkDeviceQueueCreateInfo> deviceQueueCreateInfos;
 
-    /* Convert string to const char * */
-    vector<const char *> reqExtensions;
-    for (auto &c : requiredDeviceExtensions) {
-        reqExtensions.push_back(c.c_str());
+    /* throw exception if no suitable queue available */
+    if (deviceIndex < 0) { 
+        throw std::runtime_error("Could not find a suitable device");
     }
+    const float queuePriority = 1.f; 
 
-    const VkDeviceQueueCreateInfo deviceQueueCreateInfo  = {
-        VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-        nullptr,                                //pNext
-        0,                                      //flags
-        devices[deviceIndex].get_graphics_queue_index(), //queueFamilyIndex
-        1,                                      //Queue count 
-        &queuePriority                          //pQueuePriorities
-    }; 
+    /* Use a set so we only iterate over the unique values */
+    std::set<int> uniqueQueueFamilies = {
+        devices[deviceIndex].get_graphics_queue_index(),
+        devices[deviceIndex].get_present_queue_index()};
 
+    for (auto &queueFamily : uniqueQueueFamilies) {
+        const VkDeviceQueueCreateInfo deviceQueueCreateInfo  = {
+            VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+            nullptr,                                //pNext
+            0,                                      //flags
+            (uint32_t)queueFamily,                  //queueFamilyIndex
+            1,                                      //Queue count 
+            &queuePriority                          //pQueuePriorities
+        }; 
+        deviceQueueCreateInfos.push_back(deviceQueueCreateInfo);
+    } 
+
+    /* Fill out create info structures */
     const VkDeviceCreateInfo createInfo = {
         VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         nullptr,                              //pNext
         0,                                    //flags
-        1,                                    //queueCreateInfoCount
-        &deviceQueueCreateInfo,               //pQueueCreateInfos
-        (uint32_t)validationLayers.size(),    //enaledLayerCount
-        validationLayers.data(),              //ppEnabledLayerNames,
-        (uint32_t)reqExtensions.size(),       //enabledExtensionCount,
-        reqExtensions.data(),                 //ppEnabledExtensionNames
+        (uint32_t)deviceQueueCreateInfos.size(),//queueCreateInfoCount
+        deviceQueueCreateInfos.data(),        //pQueueCreateInfos
+        (uint32_t)layers.size(),              //enaledLayerCount
+        layers.data(),                        //ppEnabledLayerNames,
+        (uint32_t)requiredDeviceExtensions.size(),  //enabledExtensionCount,
+        requiredDeviceExtensions.data(),      //ppEnabledExtensionNames
         &devices[deviceIndex].features        //pEnabledFeatures 
-    };
+    }; 
 
-    (void)createInfo;
-
+    /* Create the logical device */
     VkResult result; 
-    VkDevice logicalDevice;
     result = vkCreateDevice(
             devices[deviceIndex].physicalDevice, 
             &createInfo, 
             nullptr, 
-            &logicalDevice);
+            &device);
 
-    logicalDevices.resize(logicalDevices.size() + 1);
-    logicalDevices[logicalDevices.size() - 1].logicalDevice = logicalDevice;
     print_result(result); 
 }
 
@@ -301,7 +265,7 @@ void vk::print_layer_properties(void)
 {
     cout << "Printing instance layers" << endl;
     for (auto property : layerProperties) { 
-        cout << "Layer name: " << property.layerName << endl; 
+        cout <<  property.layerName << endl; 
     }
     cout << endl << "Printing devices layers" << endl; 
     for (auto &dev : devices) {
@@ -311,7 +275,7 @@ void vk::print_layer_properties(void)
     } 
 }
 
-void vk::load_instance_extensions(void)
+void vk::load_available_instance_extensions(void)
 { 
     uint32_t propertyCount;
     //Get vector size
@@ -329,7 +293,7 @@ void vk::load_instance_extensions(void)
     print_result(result);
 }
 
-void vk::print_instance_extensions(void) 
+void vk::print_available_instance_extensions(void) 
 {
     cout << "Printing instance extensions available" << endl;
     for (auto &extension : instanceExtensionProperties) {
@@ -371,53 +335,121 @@ void vk::print_device_extensions(void)
     }
 }
 
-//void vk::load_required_instance_extensions(void)
-//{
-//    vector<string> extensions;
-//    uint32_t extensionCount = 0;
-//    const char** glfwExtensions;
-//    glfwExtensions = glfwGetRequiredInstanceExtensions(&extensionCount);
-//
-//    for (uint32_t i = 0; i != extensionCount; i++) {
-//        extensions.push_back(string(glfwExtensions[i], strnlen(glfwExtensions[i], 255U)));
-//    }
-//
-//    cout << "Found " << endl;
-//    for (auto s : extensions) {
-//        cout << s << endl;
-//    } 
-//}
-//
-//void vk::print_required_instance_extensions(void)
-//{
-//    cout << "Printing required instance extensions..." << endl;
-//    for ( auto ext : require
-//}
-
-void vk::run(void)
-{
-    main_loop();
-}
-
-void vk::glfw_init(void)
+void vk::load_required_instance_extensions(void)
 { 
-    /* Initialize the GLFW library */
-    glfwInit();
-    /* Do not use a OpenGL context, disable resizing */
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE); 
-    /* Create the window */
-    window = glfwCreateWindow(
-            WIDTH, HEIGHT, "Vulkan", nullptr, nullptr); 
+    uint32_t extensionCount = 0; 
+    const char** glfwExtensions;
+    glfwExtensions = glfwGetRequiredInstanceExtensions(&extensionCount); 
+
+    for (uint32_t i = 0; i != extensionCount; i++) {
+        instanceExtensions.push_back(glfwExtensions[i]);
+    } 
+    /* If in debug mode then add the debug extension as well */
+#ifndef NDEBUG
+    instanceExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+#endif 
 }
 
-void vk::main_loop(void)
+void vk::print_required_instance_extensions(void)
 {
-    while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
-        //drawFrame();
+    cout << "The following are required instance extensions:" << endl;
+    for ( auto &ext : instanceExtensions) {
+        cout << ext << endl;
+    }
+} 
+
+void vk::print_device_info(device_holder_t dev)
+{ 
+    cout << "============================" << endl;
+    cout << "Printing chosen device info:" << endl; 
+
+    VkPhysicalDeviceProperties properties;
+
+    /* Device name */
+    vkGetPhysicalDeviceProperties(dev.physicalDevice, &properties); 
+    cout << std::setw(20) << std::left <<
+        "name: " << properties.deviceName << endl;
+
+    /* Type of processor */
+    int type = properties.deviceType;
+    cout << std::setw(20) << std::left <<
+        "type: "; 
+    switch (type) {
+        case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+            cout << "Integrated GPU";
+            break;
+        case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+            cout << "Discrete GPU";
+            break;
+        case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+            cout << "Virtual GPU";
+            break;
+        case VK_PHYSICAL_DEVICE_TYPE_OTHER:
+            cout << "(Other)";
+            break;
+        case VK_PHYSICAL_DEVICE_TYPE_CPU:
+            cout << "CPU"; 
+            break;
+        default:;
+    }
+    cout << endl;
+
+    /* Version */
+    cout << std::setw(20) << std::left <<
+        "Vulkan version: " << 
+        VK_VERSION_MAJOR(properties.apiVersion) << "." <<
+        VK_VERSION_MINOR(properties.apiVersion) << "." <<
+        VK_VERSION_PATCH(properties.apiVersion) << endl; 
+
+    /* Queue families */
+    int32_t i = 0;
+    for (auto &property : dev.queueFamilyProperties) {
+        cout << "Queue family index " << i << ":"; 
+        auto flags = property.queueFlags;
+        if (flags & VK_QUEUE_GRAPHICS_BIT) { 
+            cout << " | Graphics";
+        } if (flags & VK_QUEUE_COMPUTE_BIT) {
+            cout << " | Compute";
+        } if (flags & VK_QUEUE_TRANSFER_BIT) {
+            cout << " | Transfer";
+        } if (flags & VK_QUEUE_SPARSE_BINDING_BIT) {
+            cout << "| Sparse binding";
+        } 
+        cout << endl; 
+        i++;
+    }
+
+    /* Layers */ 
+    cout << "The device has " << dev.deviceLayerProperties.size() << " layers";
+    cout  <<" available" << endl;
+    for (auto &property : dev.deviceLayerProperties) {
+        cout << property.layerName << endl; 
     } 
-    //vkDeviceWaitIdle(device);
-    glfwDestroyWindow(window);
-    glfwTerminate(); 
+    cout << endl;
+
+    /* Extensions */ 
+    cout << "The device has " << dev.deviceExtensionProperties.size();
+    cout << " extensions available" << endl;
+    for (auto &property : dev.deviceExtensionProperties) {
+        cout << property.extensionName << endl; 
+    } 
+    cout << endl;
+
+    /* Graphics queue */
+    if ( dev.queueFamilyIndices.hasGraphicsQueue()) {
+        cout << "The device has a graphics queue: index " <<
+            dev.queueFamilyIndices.graphicsIndex << endl;
+    }
+    if ( dev.queueFamilyIndices.hasPresentQueue()) {
+        cout << "The device has a present queue: index " <<
+            dev.queueFamilyIndices.presentIndex << endl;
+    }
+} 
+
+void vk::create_surface(void)
+{
+    auto result = glfwCreateWindowSurface(
+            instance, window, nullptr, &surface);
+    print_result(result);
 }
+
