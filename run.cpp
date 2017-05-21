@@ -15,6 +15,7 @@ using std::vector;
 #include "debug_print.h"
 
 #include <algorithm>
+#include <unistd.h>
 
 #include <string>
 using std::string;
@@ -31,24 +32,17 @@ void vk::run(void)
 
 void vk::main_loop(void)
 {
+    uint64_t i = 0;
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
-        //drawFrame();
+   
+        if (i == 0) {
+            draw_frame(); 
+            i++;
+        } 
+         usleep(1000);
     } 
-    /* Destroy swapchains */
-    vkDestroySwapchainKHR(device, swapChain, nullptr);
-    /* Destroy command pool */
-    vkDestroyCommandPool(device, commandPool, nullptr);
-    /* Destroy surface */
-    vkDestroySurfaceKHR(instance, surface, nullptr); 
-    /* Destroy logical device */
-    vkDeviceWaitIdle(device); 
-    vkDestroyDevice(device, nullptr); 
-    /* Destroy instance */
-    vkDestroyInstance(instance, nullptr); 
-    /* Terminate window */
-    glfwDestroyWindow(window);
-    glfwTerminate(); 
+    cleanup();
 }
 
 void vk::glfw_init(void)
@@ -82,10 +76,59 @@ void vk::init(void)
     load_layer_properties();
     //print_layer_properties(); 
     //print_device_info(chosenDevice);
-    load_queues();
-    create_command_pool();
+    load_queues(); 
     load_swapchain_support_details();
-    print_swapchain_support_details(); 
-
+    //print_swapchain_support_details(); 
     create_swapchains();
+    load_swapchain_image_handles();
+    create_swapchain_image_views();
+    create_renderpass();
+    create_framebuffers();
+    create_graphics_pipeline_layout();
+    create_graphics_pipeline();
+    create_command_pool();
+    allocate_command_buffers();
+    record_command_buffers();
+    create_semaphores();
+}
+
+void vk::cleanup(void)
+{
+    vkDeviceWaitIdle(device); 
+
+    /* Destroy semaphores */
+    vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
+    vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
+
+    /* Free command buffers */
+    vkFreeCommandBuffers(
+            device,
+            commandPool,
+            (uint32_t)commandBuffers.size(),
+            commandBuffers.data());
+    /* Destroy graphics pipeline */
+    vkDestroyPipeline(device, graphicsPipeline, nullptr);
+    /* Destroy framebuffers */
+    for (auto &i : swapchainFramebuffers) {
+        vkDestroyFramebuffer(device, i, nullptr);
+    }
+    /* Destroy renderpass */
+    vkDestroyRenderPass(device, renderPass, nullptr);
+    /* Destroy swapchain imageviews */
+    for (auto &i : swapchainImageViews) {
+        vkDestroyImageView(device, i, nullptr);
+    }
+    /* Destroy swapchains */
+    vkDestroySwapchainKHR(device, swapchain, nullptr);
+    /* Destroy command pool */
+    vkDestroyCommandPool(device, commandPool, nullptr);
+    /* Destroy surface */
+    vkDestroySurfaceKHR(instance, surface, nullptr); 
+    /* Destroy logical device */ 
+    vkDestroyDevice(device, nullptr); 
+    /* Destroy instance */
+    vkDestroyInstance(instance, nullptr); 
+    /* Terminate window */
+    glfwDestroyWindow(window);
+    glfwTerminate(); 
 }

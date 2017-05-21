@@ -128,27 +128,6 @@ void vk::load_queue_family_properties(void)
     }
 }
 
-void vk::print_queue_family_properties(void)
-{
-    cout << "Printing queue capabilities..." << endl;
-    VkQueueFlags flags; 
-
-    for (auto &device : devices) {
-        for (auto &queueFamilyProperty : device.queueFamilyProperties) { 
-            flags = queueFamilyProperty.queueFlags;
-            if (flags & VK_QUEUE_GRAPHICS_BIT) { 
-                cout << "Graphics capable" << endl;
-            } if (flags & VK_QUEUE_COMPUTE_BIT) {
-                cout << "Compute capable" << endl;
-            } if (flags & VK_QUEUE_TRANSFER_BIT) {
-                cout << "Transfer capable" << endl; 
-            } if (flags & VK_QUEUE_SPARSE_BINDING_BIT) {
-                cout << "Sparse binding" << endl; 
-            } 
-        }
-    } 
-}
-
 /* Looks for and returns an index to a device with a graphics queue family */
 int32_t vk::find_suitable_device(void)
 { 
@@ -261,20 +240,6 @@ void vk::load_layer_properties(void)
     }
 } 
 
-void vk::print_layer_properties(void) 
-{
-    cout << "Printing instance layers" << endl;
-    for (auto property : layerProperties) { 
-        cout <<  property.layerName << endl; 
-    }
-    cout << endl << "Printing devices layers" << endl; 
-    for (auto &dev : devices) {
-        for (auto &property : dev.deviceLayerProperties) {
-            cout << "Layer name: " << property.layerName << endl; 
-        }
-    } 
-}
-
 void vk::load_available_instance_extensions(void)
 { 
     uint32_t propertyCount;
@@ -291,16 +256,7 @@ void vk::load_available_instance_extensions(void)
             &propertyCount,
             instanceExtensionProperties.data()); 
     print_result(result);
-}
-
-void vk::print_available_instance_extensions(void) 
-{
-    cout << "Printing instance extensions available" << endl;
-    for (auto &extension : instanceExtensionProperties) {
-        cout << extension.extensionName << endl;
-    }
-}
-
+} 
 
 void vk::load_device_extensions(void)
 {
@@ -325,16 +281,6 @@ void vk::load_device_extensions(void)
 
 }
 
-void vk::print_device_extensions(void)
-{
-    cout << "Printing device extensions available" << endl;
-    for (auto &dev : devices) {
-        for (auto &extension : dev.deviceExtensionProperties) {
-            cout << extension.extensionName << endl;
-        } 
-    }
-}
-
 void vk::load_required_instance_extensions(void)
 { 
     uint32_t extensionCount = 0; 
@@ -349,102 +295,6 @@ void vk::load_required_instance_extensions(void)
     instanceExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
 #endif 
 }
-
-void vk::print_required_instance_extensions(void)
-{
-    cout << "The following are required instance extensions:" << endl;
-    for ( auto &ext : instanceExtensions) {
-        cout << ext << endl;
-    }
-} 
-
-void vk::print_device_info(device_holder_t dev)
-{ 
-    cout << "============================" << endl;
-    cout << "Printing chosen device info:" << endl; 
-
-    VkPhysicalDeviceProperties properties;
-
-    /* Device name */
-    vkGetPhysicalDeviceProperties(dev.physicalDevice, &properties); 
-    cout << std::setw(20) << std::left <<
-        "name: " << properties.deviceName << endl;
-
-    /* Type of processor */
-    int type = properties.deviceType;
-    cout << std::setw(20) << std::left <<
-        "type: "; 
-    switch (type) {
-        case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
-            cout << "Integrated GPU";
-            break;
-        case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
-            cout << "Discrete GPU";
-            break;
-        case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
-            cout << "Virtual GPU";
-            break;
-        case VK_PHYSICAL_DEVICE_TYPE_OTHER:
-            cout << "(Other)";
-            break;
-        case VK_PHYSICAL_DEVICE_TYPE_CPU:
-            cout << "CPU"; 
-            break;
-        default:;
-    }
-    cout << endl;
-
-    /* Version */
-    cout << std::setw(20) << std::left <<
-        "Vulkan version: " << 
-        VK_VERSION_MAJOR(properties.apiVersion) << "." <<
-        VK_VERSION_MINOR(properties.apiVersion) << "." <<
-        VK_VERSION_PATCH(properties.apiVersion) << endl; 
-
-    /* Queue families */
-    int32_t i = 0;
-    for (auto &property : dev.queueFamilyProperties) {
-        cout << "Queue family index " << i << ":"; 
-        auto flags = property.queueFlags;
-        if (flags & VK_QUEUE_GRAPHICS_BIT) { 
-            cout << " | Graphics";
-        } if (flags & VK_QUEUE_COMPUTE_BIT) {
-            cout << " | Compute";
-        } if (flags & VK_QUEUE_TRANSFER_BIT) {
-            cout << " | Transfer";
-        } if (flags & VK_QUEUE_SPARSE_BINDING_BIT) {
-            cout << "| Sparse binding";
-        } 
-        cout << endl; 
-        i++;
-    }
-
-    /* Layers */ 
-    cout << "The device has " << dev.deviceLayerProperties.size() << " layers";
-    cout  <<" available" << endl;
-    for (auto &property : dev.deviceLayerProperties) {
-        cout << property.layerName << endl; 
-    } 
-    cout << endl;
-
-    /* Extensions */ 
-    cout << "The device has " << dev.deviceExtensionProperties.size();
-    cout << " extensions available" << endl;
-    for (auto &property : dev.deviceExtensionProperties) {
-        cout << property.extensionName << endl; 
-    } 
-    cout << endl;
-
-    /* Graphics queue */
-    if ( dev.queueFamilyIndices.hasGraphicsQueue()) {
-        cout << "The device has a graphics queue: index " <<
-            dev.queueFamilyIndices.graphicsIndex << endl;
-    }
-    if ( dev.queueFamilyIndices.hasPresentQueue()) {
-        cout << "The device has a present queue: index " <<
-            dev.queueFamilyIndices.presentIndex << endl;
-    }
-} 
 
 void vk::create_surface(void)
 {

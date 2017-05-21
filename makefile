@@ -22,6 +22,14 @@ $(TARGET): $(OBJ) $(HEADER)
 clean:
 	rm -f ./{$(TARGET),*.o}
 
+shaders: vert frag
+
+vert: $(wildcard ./shaders/*.vert)
+	$(VULKAN_SDK_PATH)/bin/glslangValidator -V $< -o shaders/vert.spv 
+
+frag: $(wildcard ./shaders/*.frag)
+	$(VULKAN_SDK_PATH)/bin/glslangValidator -V $< -o shaders/frag.spv 
+
 test: $(TARGET)
 	LD_LIBRARY_PATH=$(VULKAN_SDK_PATH)/lib 
 	VK_LAYER_PATH=$(VULKAN_SDK_PATH)/etc/expliit_layer.d

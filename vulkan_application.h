@@ -55,8 +55,9 @@ class vk {
         void glfw_init(void);
         void run(void);
 
-    private:
+    private: 
         void main_loop(void); 
+        void cleanup(void);
         /* SETUP */
         void initWindow(void);
         void create_instance(void); 
@@ -79,16 +80,27 @@ class vk {
         void create_surface(void);
         /* RESOURCES */ 
         void load_queues(void);
-        void create_command_pool(void);
-        void get_command_buffers(void);
         void load_swapchain_support_details(void);
         void print_swapchain_support_details(void);
         VkSurfaceFormatKHR get_suitable_swapchain_surface_format(void);
         VkPresentModeKHR get_suitable_swapchain_present_mode(void);
-        VkExtent2D get_swapchain_extent(void);
-
-
+        VkExtent2D get_swapchain_extent(void); 
         void create_swapchains(void); 
+        void load_swapchain_image_handles(void);
+        void create_swapchain_image_views(void); 
+        void create_renderpass(void);
+        void create_framebuffers(void);
+        void create_graphics_pipeline_layout(void); 
+        std::vector<char> read_file(const std::string& filename);
+        void create_shader_module(const std::vector<char> &code,
+                VkShaderModule &shaderModule);
+        void create_graphics_pipeline(void);
+        void create_command_pool(void); 
+        void allocate_command_buffers(void);
+        void record_command_buffers(void);
+        void create_semaphores(void);
+        void draw_frame(void);
+
 
         /* GLFW data */
         GLFWwindow* window;
@@ -124,9 +136,21 @@ class vk {
         VkSurfaceKHR surface;
         VkQueue graphicsQueue; 
         VkQueue presentQueue; 
-        VkCommandPool commandPool;
-        VkSwapchainKHR swapChain;
+        VkSwapchainKHR swapchain;
+        VkFormat swapchainImageFormat;
+        VkExtent2D swapchainExtent;
         swapchain_support_details_t swapchainSupportDetails;
+        std::vector<VkImage> swapchainImages;
+        std::vector<VkImageView> swapchainImageViews;
+        VkRenderPass renderPass;
+        std::vector<VkFramebuffer> swapchainFramebuffers;
+        VkPipelineLayout graphicsPipelineLayout;
+        VkPipeline graphicsPipeline;
+        VkCommandPool commandPool;
+        std::vector<VkCommandBuffer> commandBuffers;
+        VkSemaphore imageAvailableSemaphore;
+        VkSemaphore renderFinishedSemaphore;
+
 
 }; 
 #endif 
