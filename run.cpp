@@ -31,16 +31,11 @@ void vk::run(void)
 }
 
 void vk::main_loop(void)
-{
-    uint64_t i = 0;
+{ 
     while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
-   
-        if (i == 0) {
-            draw_frame(); 
-            i++;
-        } 
-         usleep(1000);
+        glfwPollEvents(); 
+        draw_frame(); 
+        usleep(10000);
     } 
     cleanup();
 }
